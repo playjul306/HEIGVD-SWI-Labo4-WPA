@@ -74,10 +74,19 @@ Modifier votre script de cracking pour qu’il soit capable de faire les mêmes 
 Un fork du repo original . Puis, un Pull Request contenant **vos noms** et :
 
 - Script ```wpa_key_derivation.py``` **modifié pour** la récupération automatique des paramètres à partir de la capture. **Les modifications doivent être commentées/documentées**
+
 - Script ```scaircrack.py``` **abondamment commenté/documenté** + fichier wordlist
+   
    - Capture d’écran de votre script en action
+   
+   - ![script2](image/script2.png)
+   
+     Comme nous pouvons le voir sur la capture ci-dessus, lorsque la passPhrase est dans le dictionnaire, nous obtenons cette dernière (en rouge), ainsi que des informations supplémentaires. Alors que dans le cas contraire, nous sommes juste informé que la passPhrase n’a pas été trouvée (en vert).
+   
 -	**(Challenge optionnel)** Script ```scairodump.py``` **abondamment commenté/documenté** 
+   
    - Capture d’écran de votre script en action
+   
 -	Envoyer le hash du commit et votre username GitHub et **les noms des participants** par email au professeur et à l'assistant
 
 

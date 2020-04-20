@@ -4,9 +4,10 @@
 """
 Derive WPA keys from Passphrase and 4-way handshake info
 
-Calcule un MIC d'authentification (le MIC pour la transmission de données
+Grâce au calcule du MIC d'authentification (le MIC pour la transmission de données
 utilise l'algorithme Michael. Dans ce cas-ci, l'authentification, on utilise
-sha-1 pour WPA2 ou MD5 pour WPA)
+sha-1 pour WPA2 ou MD5 pour WPA) de chaque passPhrase et la comparaison de ce dernier avec le mic récupéré par wireshark,
+cela nous permet de truver la passphrase dans un dictionnaire
 """
 
 __author__      = "Volkan Sütcü et Julien Benoit"
@@ -47,7 +48,6 @@ handshake2 = wpa[6]
 handshake4 = wpa[8]
 
 # Important parameters for key derivation - most of them can be obtained from the pcap file
-passPhrase  = "actuelle"
 A           = "Pairwise key expansion" #this string is used in the pseudo-random function
 ssid        = beaconFrame.info.decode()
 # On remplace les ":"" par "" dans les mac adresses du client et de l'AP, afin de les transformer en bytes
@@ -68,33 +68,55 @@ B           = min(APmac,Clientmac)+max(APmac,Clientmac)+min(ANonce,SNonce)+max(A
 # Nous récupérons la partie EAPOL du hanshake4 jusqu'à la MIC (non compris) et on ajoute 18 bytes à 0 pour correspondre à la taille du data précédement fourni
 data        = bytes(handshake4['EAPOL'])[:81] + b'\x00' * 18
 
+
 print ("\n\nValues used to derivate keys")
 print ("============================")
-print ("Passphrase: ",passPhrase,"\n")
 print ("SSID: ",ssid,"\n")
 print ("AP Mac: ",b2a_hex(APmac),"\n")
 print ("CLient Mac: ",b2a_hex(Clientmac),"\n")
 print ("AP Nonce: ",b2a_hex(ANonce),"\n")
 print ("Client Nonce: ",b2a_hex(SNonce),"\n")
 
-#calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
-passPhrase = str.encode(passPhrase)
+passPhraseFile = "passPhraseFile.txt"
+passPhraseFound = "la passPhrase n'a pas été trouvée"
 ssid = str.encode(ssid)
-pmk = pbkdf2(hashlib.sha1,passPhrase, ssid, 4096, 32)
 
-#expand pmk to obtain PTK
-ptk = customPRF512(pmk,str.encode(A),B)
+# Permet de parcourir le fichier de passPhrases
+with open(passPhraseFile) as passPhraseFile:
+    for passPhrase in passPhraseFile:
+        # Permet d'enlever le \n en fin de ligne s'il y en a un
+        if passPhrase[-1:] == "\n":
+            passPhrase = passPhrase[:-1]
+        
+        #calculate 4096 rounds to obtain the 256 bit (32 oct) PMK
+        passPhrase = str.encode(passPhrase)
+        pmk = pbkdf2(hashlib.sha1,passPhrase, ssid, 4096, 32)
 
-#calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
-mic = hmac.new(ptk[0:16],data,hashlib.sha1)
+        #expand pmk to obtain PTK
+        ptk = customPRF512(pmk,str.encode(A),B)
 
+        #calculate MIC over EAPOL payload (Michael)- The ptk is, in fact, KCK|KEK|TK|MICK
+        # Permet d'identifier le type de hash devant être utilisé
+        mic = hmac.new(ptk[0:16],data,hashlib.md5) if int.from_bytes(handshake1.load[0:1], byteorder='big') != 2 else hmac.new(ptk[0:16],data,hashlib.sha1)
 
-print ("\nResults of the key expansion")
-print ("=============================")
-print ("PMK:\t\t",pmk.hex(),"\n")
-print ("PTK:\t\t",ptk.hex(),"\n")
-print ("KCK:\t\t",ptk[0:16].hex(),"\n")
-print ("KEK:\t\t",ptk[16:32].hex(),"\n")
-print ("TK:\t\t",ptk[32:48].hex(),"\n")
-print ("MICK:\t\t",ptk[48:64].hex(),"\n")
-print ("MIC:\t\t",mic.hexdigest(),"\n")
+        # Si le mic calculé correspond au mic récupéré, alors la passPhrase a été trouvée
+        if mic.hexdigest()[:-8] == b2a_hex(mic_to_test).decode():
+
+            print ("\nResults of the key expansion")
+            print ("=============================")
+            print ("PMK:\t\t",pmk.hex(),"\n")
+            print ("PTK:\t\t",ptk.hex(),"\n")
+            print ("KCK:\t\t",ptk[0:16].hex(),"\n")
+            print ("KEK:\t\t",ptk[16:32].hex(),"\n")
+            print ("TK:\t\t",ptk[32:48].hex(),"\n")
+            print ("MICK:\t\t",ptk[48:64].hex(),"\n")
+            print ("MIC:\t\t",mic.hexdigest(),"\n")
+            passPhraseFound = passPhrase.decode()
+            break
+
+    
+    print ("\nResult of the passPhrase")
+    print ("=============================")
+    print("PassPhrase:\t", passPhraseFound,"\n")
+
+            
